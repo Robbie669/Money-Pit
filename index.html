@@ -51,9 +51,9 @@
 
         <div class="summary">
             <h2>Summary</h2>
-            <p><strong>Total Income:</strong> <span id="totalIncome">0</span></p>
-            <p><strong>Total Expenses:</strong> <span id="totalExpenses">0</span></p>
-            <p><strong>Net Balance:</strong> <span id="netBalance">0</span></p>
+            <p><strong>Total Income:</strong> <span id="totalIncome">$0.00</span></p>
+            <p><strong>Total Expenses:</strong> <span id="totalExpenses">$0.00</span></p>
+            <p><strong>Net Balance:</strong> <span id="netBalance">$0.00</span></p>
         </div>
 
         <h2>Entries</h2>
@@ -72,13 +72,13 @@
     </div>
 
     <!-- Supabase client -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://jsdelivr.net"></script>
     <script>
         console.log("Initializing Supabase…");
-        const SUPABASE_URL = "https://xuagfcmkxsecdugsfyf.supabase.co";
+        const SUPABASE_URL = "https://supabase.co";
         const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh1YWdmY21reHNlY2RjdWdzZnlmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc3NzA3NTksImV4cCI6MjEwMzM0Njc1OX0.gYSWhd4guIezxMBkoRo1u3xSS9E6tXL7bMD2LF3UIiE";
         
-        // FIXED: Changed 'supabase.createClient' to 'supabase.createClient' using the correct global library reference
+        // FIXED: Initialized utilizing lowercase global reference 'supabase.createClient'
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         console.log("Supabase client created:", supabaseClient);
 
@@ -99,30 +99,31 @@
 
         async function addEntry() {
             console.log("Add Entry clicked");
-            const date = document.getElementById("date").value;
-            const type = document.getElementById("type").value;
-            const category = document.getElementById("category").value.trim();
+            const dateValue = document.getElementById("date").value;
+            const typeValue = document.getElementById("type").value;
+            const categoryValue = document.getElementById("category").value.trim();
             const amountValue = document.getElementById("amount").value;
 
-            if (!amountValue || !category) {
+            if (!amountValue || !categoryValue) {
                 alert("Please enter both category and amount.");
                 return;
             }
 
-            const amount = parseFloat(amountValue);
-            if (isNaN(amount) || amount <= 0) {
+            const amountNum = parseFloat(amountValue);
+            if (isNaN(amountNum) || amountNum <= 0) {
                 alert("Please enter a valid positive amount.");
                 return;
             }
 
-            console.log("Inserting:", { date, type, category, amount });
+            // FIXED: Payload keys match your capitalized database headers (Date, Type, Category, Amount)
+            console.log("Inserting:", { Date: dateValue, Type: typeValue, Category: categoryValue, Amount: amountNum });
             const { error } = await supabaseClient
                 .from("budget_entries")
-                .insert([{ date, type, category, amount }]);
+                .insert([{ Date: dateValue, Type: typeValue, Category: categoryValue, Amount: amountNum }]);
 
             if (error) {
                 console.error("Error adding entry:", error);
-                alert("Failed to add entry. Check if your database table structure matches exactly.");
+                alert("Failed to add entry. Check if Row Level Security (RLS) or table schema matches.");
                 return;
             }
 
@@ -156,19 +157,20 @@
 
             entries.forEach(entry => {
                 const tr = document.createElement("tr");
+                // FIXED: Property parsing reads from capitalized keys returned by your database
                 tr.innerHTML = `
-                    <td>${entry.date || ""}</td>
-                    <td>${entry.type}</td>
-                    <td>${entry.category}</td>
-                    <td>$${entry.amount.toFixed(2)}</td>
+                    <td>${entry.Date || ""}</td>
+                    <td>${entry.Type || ""}</td>
+                    <td>${entry.Category || ""}</td>
+                    <td>$${entry.Amount ? entry.Amount.toFixed(2) : "0.00"}</td>
                     <td>
                         <button class="delete-btn" onclick="deleteEntry(${entry.id})">Delete</button>
                     </td>
                 `;
                 tbody.appendChild(tr);
 
-                if (entry.type === "income") totalIncome += entry.amount;
-                else totalExpenses += entry.amount;
+                if (entry.Type === "income") totalIncome += entry.Amount;
+                else if (entry.Type === "expense") totalExpenses += entry.Amount;
             });
 
             document.getElementById("totalIncome").textContent = "$" + totalIncome.toFixed(2);
@@ -186,4 +188,3 @@
     </script>
 </body>
 </html>
-
