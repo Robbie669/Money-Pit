@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <title>Daily Budget Tracker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
   <style>
     body {
       font-family: system-ui, sans-serif;
@@ -142,48 +144,60 @@
     </table>
   </div>
 
-  <!-- Supabase -->
+  <!-- Supabase client -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
   <script>
+    console.log("Initializing Supabase…");
+
     const SUPABASE_URL = "https://xuagfcmkxsecdugsfyf.supabase.co";
     const SUPABASE_ANON_KEY =
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh1YWdmY21reHNlY2RjdWdzZnlmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc3NzA3NTksImV4cCI6MjEwMzM0Njc1OX0.gYSWhd4guIezxMBkoRo1u3xSS9E6tXL7bMD2LF3UIiE";
 
     const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+    console.log("Supabase client created:", supabase);
+
     async function loadEntries() {
+      console.log("Loading entries…");
+
       const { data, error } = await supabase
-        .from('budget_entries')
-        .select('*')
-        .order('id', { ascending: false });
+        .from("budget_entries")
+        .select("*")
+        .order("id", { ascending: false });
 
       if (error) {
         console.error("Error loading entries:", error);
         return [];
       }
 
+      console.log("Entries loaded:", data);
       return data;
     }
 
     async function addEntry() {
-      const date = document.getElementById('date').value;
-      const type = document.getElementById('type').value;
-      const category = document.getElementById('category').value.trim();
-      const amountValue = document.getElementById('amount').value;
+      console.log("Add Entry clicked");
+
+      const date = document.getElementById("date").value;
+      const type = document.getElementById("type").value;
+      const category = document.getElementById("category").value.trim();
+      const amountValue = document.getElementById("amount").value;
 
       if (!amountValue || !category) {
-        alert('Please enter both category and amount.');
+        alert("Please enter both category and amount.");
         return;
       }
 
       const amount = parseFloat(amountValue);
       if (isNaN(amount) || amount <= 0) {
-        alert('Please enter a valid positive amount.');
+        alert("Please enter a valid positive amount.");
         return;
       }
 
+      console.log("Inserting:", { date, type, category, amount });
+
       const { error } = await supabase
-        .from('budget_entries')
+        .from("budget_entries")
         .insert([{ date, type, category, amount }]);
 
       if (error) {
@@ -192,17 +206,19 @@
         return;
       }
 
-      document.getElementById('category').value = '';
-      document.getElementById('amount').value = '';
+      document.getElementById("category").value = "";
+      document.getElementById("amount").value = "";
 
       renderEntries();
     }
 
     async function deleteEntry(id) {
+      console.log("Deleting entry:", id);
+
       const { error } = await supabase
-        .from('budget_entries')
+        .from("budget_entries")
         .delete()
-        .eq('id', id);
+        .eq("id", id);
 
       if (error) {
         console.error("Error deleting entry:", error);
@@ -215,17 +231,17 @@
 
     async function renderEntries() {
       const entries = await loadEntries();
-      const tbody = document.getElementById('entriesTableBody');
-      tbody.innerHTML = '';
+      const tbody = document.getElementById("entriesTableBody");
+      tbody.innerHTML = "";
 
       let totalIncome = 0;
       let totalExpenses = 0;
 
       entries.forEach(entry => {
-        const tr = document.createElement('tr');
+        const tr = document.createElement("tr");
 
         tr.innerHTML = `
-          <td>${entry.date || ''}</td>
+          <td>${entry.date || ""}</td>
           <td>${entry.type}</td>
           <td>${entry.category}</td>
           <td>${entry.amount.toFixed(2)}</td>
@@ -236,22 +252,22 @@
 
         tbody.appendChild(tr);
 
-        if (entry.type === 'income') totalIncome += entry.amount;
+        if (entry.type === "income") totalIncome += entry.amount;
         else totalExpenses += entry.amount;
       });
 
-      document.getElementById('totalIncome').textContent = totalIncome.toFixed(2);
-      document.getElementById('totalExpenses').textContent = totalExpenses.toFixed(2);
-      document.getElementById('netBalance').textContent = (totalIncome - totalExpenses).toFixed(2);
+      document.getElementById("totalIncome").textContent = totalIncome.toFixed(2);
+      document.getElementById("totalExpenses").textContent = totalExpenses.toFixed(2);
+      document.getElementById("netBalance").textContent = (totalIncome - totalExpenses).toFixed(2);
     }
 
-    window.addEventListener('load', () => {
-      const today = new Date().toISOString().split('T')[0];
-      document.getElementById('date').value = today;
+    window.addEventListener("load", () => {
+      const today = new Date().toISOString().split("T")[0];
+      document.getElementById("date").value = today;
       renderEntries();
     });
 
-    document.getElementById('addEntryBtn').addEventListener('click', addEntry);
+    document.getElementById("addEntryBtn").addEventListener("click", addEntry);
   </script>
 
 </body>
