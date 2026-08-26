@@ -92,10 +92,11 @@
     }
   </style>
 </head>
+
 <body>
   <div class="container">
     <h1>Daily Budget Tracker</h1>
-    <p>Track your income and expenses daily. Data is saved in your browser using localStorage.</p>
+    <p>Track your income and expenses daily. Data is saved in Supabase cloud.</p>
 
     <div class="flex-row">
       <div>
@@ -137,73 +138,34 @@
           <th>Actions</th>
         </tr>
       </thead>
-      <tbody id="entriesTableBody">
-      </tbody>
+      <tbody id="entriesTableBody"></tbody>
     </table>
   </div>
 
+  <!-- Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
-    const STORAGE_KEY = 'daily_budget_entries';
+    const SUPABASE_URL = "https://xuagfcmkxsecdugsfyf.supabase.co";
+    const SUPABASE_ANON_KEY =
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh1YWdmY21reHNlY2RjdWdzZnlmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc3NzA3NTksImV4cCI6MjEwMzM0Njc1OX0.gYSWhd4guIezxMBkoRo1u3xSS9E6tXL7bMD2LF3UIiE";
 
-    function loadEntries() {
-      const data = localStorage.getItem(STORAGE_KEY);
-      return data ? JSON.parse(data) : [];
+    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    async function loadEntries() {
+      const { data, error } = await supabase
+        .from('budget_entries')
+        .select('*')
+        .order('id', { ascending: false });
+
+      if (error) {
+        console.error("Error loading entries:", error);
+        return [];
+      }
+
+      return data;
     }
 
-    function saveEntries(entries) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
-    }
-
-    function renderEntries() {
-      const entries = loadEntries();
-      const tbody = document.getElementById('entriesTableBody');
-      tbody.innerHTML = '';
-
-      let totalIncome = 0;
-      let totalExpenses = 0;
-
-      entries.forEach((entry, index) => {
-        const tr = document.createElement('tr');
-
-        const tdDate = document.createElement('td');
-        tdDate.textContent = entry.date || '';
-        tr.appendChild(tdDate);
-
-        const tdType = document.createElement('td');
-        tdType.textContent = entry.type;
-        tr.appendChild(tdType);
-
-        const tdCategory = document.createElement('td');
-        tdCategory.textContent = entry.category;
-        tr.appendChild(tdCategory);
-
-        const tdAmount = document.createElement('td');
-        tdAmount.textContent = entry.amount.toFixed(2);
-        tr.appendChild(tdAmount);
-
-        const tdActions = document.createElement('td');
-        const delBtn = document.createElement('button');
-        delBtn.textContent = 'Delete';
-        delBtn.className = 'delete-btn';
-        delBtn.onclick = () => deleteEntry(index);
-        tdActions.appendChild(delBtn);
-        tr.appendChild(tdActions);
-
-        tbody.appendChild(tr);
-
-        if (entry.type === 'income') {
-          totalIncome += entry.amount;
-        } else {
-          totalExpenses += entry.amount;
-        }
-      });
-
-      document.getElementById('totalIncome').textContent = totalIncome.toFixed(2);
-      document.getElementById('totalExpenses').textContent = totalExpenses.toFixed(2);
-      document.getElementById('netBalance').textContent = (totalIncome - totalExpenses).toFixed(2);
-    }
-
-    function addEntry() {
+    async function addEntry() {
       const date = document.getElementById('date').value;
       const type = document.getElementById('type').value;
       const category = document.getElementById('category').value.trim();
@@ -220,39 +182,77 @@
         return;
       }
 
-      const entries = loadEntries();
-      entries.push({ date, type, category, amount });
-      saveEntries(entries);
-      renderEntries();
+      const { error } = await supabase
+        .from('budget_entries')
+        .insert([{ date, type, category, amount }]);
+
+      if (error) {
+        console.error("Error adding entry:", error);
+        alert("Failed to add entry.");
+        return;
+      }
 
       document.getElementById('category').value = '';
       document.getElementById('amount').value = '';
-    }
 
-    function deleteEntry(index) {
-      const entries = loadEntries();
-      entries.splice(index, 1);
-      saveEntries(entries);
       renderEntries();
     }
 
-    document.getElementById('addEntryBtn').addEventListener('click', addEntry);
+    async function deleteEntry(id) {
+      const { error } = await supabase
+        .from('budget_entries')
+        .delete()
+        .eq('id', id);
 
-    // Initialize
+      if (error) {
+        console.error("Error deleting entry:", error);
+        alert("Failed to delete entry.");
+        return;
+      }
+
+      renderEntries();
+    }
+
+    async function renderEntries() {
+      const entries = await loadEntries();
+      const tbody = document.getElementById('entriesTableBody');
+      tbody.innerHTML = '';
+
+      let totalIncome = 0;
+      let totalExpenses = 0;
+
+      entries.forEach(entry => {
+        const tr = document.createElement('tr');
+
+        tr.innerHTML = `
+          <td>${entry.date || ''}</td>
+          <td>${entry.type}</td>
+          <td>${entry.category}</td>
+          <td>${entry.amount.toFixed(2)}</td>
+          <td>
+            <button class="delete-btn" onclick="deleteEntry(${entry.id})">Delete</button>
+          </td>
+        `;
+
+        tbody.appendChild(tr);
+
+        if (entry.type === 'income') totalIncome += entry.amount;
+        else totalExpenses += entry.amount;
+      });
+
+      document.getElementById('totalIncome').textContent = totalIncome.toFixed(2);
+      document.getElementById('totalExpenses').textContent = totalExpenses.toFixed(2);
+      document.getElementById('netBalance').textContent = (totalIncome - totalExpenses).toFixed(2);
+    }
+
     window.addEventListener('load', () => {
-      // Default date = today
       const today = new Date().toISOString().split('T')[0];
       document.getElementById('date').value = today;
       renderEntries();
     });
+
+    document.getElementById('addEntryBtn').addEventListener('click', addEntry);
   </script>
+
 </body>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script>
-    const SUPABASE_URL = "https://xuagfcmkxsecdugsfyf.supabase.co";
-    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh1YWdmY21reHNlY2RjdWdzZnlmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc3NzA3NTksImV4cCI6MjEwMzM0Njc1OX0.gYSWhd4guIezxMBkoRo1u3xSS9E6tXL7bMD2LF3UIiE";
-
-    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-</script>
-
 </html>
