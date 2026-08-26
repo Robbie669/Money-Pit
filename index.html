@@ -247,4 +247,12 @@
     });
   </script>
 </body>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+    const SUPABASE_URL = "https://xuagfcmkxsecdugsfyf.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh1YWdmY21reHNlY2RjdWdzZnlmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc3NzA3NTksImV4cCI6MjEwMzM0Njc1OX0.gYSWhd4guIezxMBkoRo1u3xSS9E6tXL7bMD2LF3UIiE";
+
+    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+</script>
+
 </html>
