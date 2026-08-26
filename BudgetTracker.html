@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Daily Budget Tracker</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0b0c10;
+      color: #c5c6c7;
+      margin: 0;
+      padding: 20px;
+    }
+    h1 {
+      color: #66fcf1;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: #1f2833;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.5);
+    }
+    label {
+      display: block;
+      margin-top: 10px;
+      font-weight: 600;
+    }
+    input, select {
+      width: 100%;
+      padding: 8px;
+      margin-top: 4px;
+      border-radius: 4px;
+      border: 1px solid #45a29e;
+      background: #0b0c10;
+      color: #c5c6c7;
+    }
+    button {
+      margin-top: 15px;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 4px;
+      background: #45a29e;
+      color: #0b0c10;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #66fcf1;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th, td {
+      padding: 8px;
+      border-bottom: 1px solid #45a29e;
+      text-align: left;
+      font-size: 0.9rem;
+    }
+    th {
+      background: #0b0c10;
+      color: #66fcf1;
+    }
+    .summary {
+      margin-top: 20px;
+      padding: 10px;
+      background: #0b0c10;
+      border-radius: 6px;
+      border: 1px solid #45a29e;
+    }
+    .flex-row {
+      display: flex;
+      gap: 10px;
+    }
+    .flex-row > div {
+      flex: 1;
+    }
+    .delete-btn {
+      background: #c0392b;
+      color: #fff;
+      padding: 4px 8px;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+    .delete-btn:hover {
+      background: #e74c3c;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Daily Budget Tracker</h1>
+    <p>Track your income and expenses daily. Data is saved in your browser using localStorage.</p>
+
+    <div class="flex-row">
+      <div>
+        <label for="date">Date</label>
+        <input type="date" id="date">
+      </div>
+      <div>
+        <label for="type">Type</label>
+        <select id="type">
+          <option value="income">Income</option>
+          <option value="expense">Expense</option>
+        </select>
+      </div>
+    </div>
+
+    <label for="category">Category</label>
+    <input type="text" id="category" placeholder="e.g. Groceries, Rent, Salary">
+
+    <label for="amount">Amount</label>
+    <input type="number" id="amount" step="0.01" placeholder="e.g. 25.50">
+
+    <button id="addEntryBtn">Add Entry</button>
+
+    <div class="summary">
+      <h2>Summary</h2>
+      <p><strong>Total Income:</strong> <span id="totalIncome">0</span></p>
+      <p><strong>Total Expenses:</strong> <span id="totalExpenses">0</span></p>
+      <p><strong>Net Balance:</strong> <span id="netBalance">0</span></p>
+    </div>
+
+    <h2>Entries</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Type</th>
+          <th>Category</th>
+          <th>Amount</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="entriesTableBody">
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    const STORAGE_KEY = 'daily_budget_entries';
+
+    function loadEntries() {
+      const data = localStorage.getItem(STORAGE_KEY);
+      return data ? JSON.parse(data) : [];
+    }
+
+    function saveEntries(entries) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+    }
+
+    function renderEntries() {
+      const entries = loadEntries();
+      const tbody = document.getElementById('entriesTableBody');
+      tbody.innerHTML = '';
+
+      let totalIncome = 0;
+      let totalExpenses = 0;
+
+      entries.forEach((entry, index) => {
+        const tr = document.createElement('tr');
+
+        const tdDate = document.createElement('td');
+        tdDate.textContent = entry.date || '';
+        tr.appendChild(tdDate);
+
+        const tdType = document.createElement('td');
+        tdType.textContent = entry.type;
+        tr.appendChild(tdType);
+
+        const tdCategory = document.createElement('td');
+        tdCategory.textContent = entry.category;
+        tr.appendChild(tdCategory);
+
+        const tdAmount = document.createElement('td');
+        tdAmount.textContent = entry.amount.toFixed(2);
+        tr.appendChild(tdAmount);
+
+        const tdActions = document.createElement('td');
+        const delBtn = document.createElement('button');
+        delBtn.textContent = 'Delete';
+        delBtn.className = 'delete-btn';
+        delBtn.onclick = () => deleteEntry(index);
+        tdActions.appendChild(delBtn);
+        tr.appendChild(tdActions);
+
+        tbody.appendChild(tr);
+
+        if (entry.type === 'income') {
+          totalIncome += entry.amount;
+        } else {
+          totalExpenses += entry.amount;
+        }
+      });
+
+      document.getElementById('totalIncome').textContent = totalIncome.toFixed(2);
+      document.getElementById('totalExpenses').textContent = totalExpenses.toFixed(2);
+      document.getElementById('netBalance').textContent = (totalIncome - totalExpenses).toFixed(2);
+    }
+
+    function addEntry() {
+      const date = document.getElementById('date').value;
+      const type = document.getElementById('type').value;
+      const category = document.getElementById('category').value.trim();
+      const amountValue = document.getElementById('amount').value;
+
+      if (!amountValue || !category) {
+        alert('Please enter both category and amount.');
+        return;
+      }
+
+      const amount = parseFloat(amountValue);
+      if (isNaN(amount) || amount <= 0) {
+        alert('Please enter a valid positive amount.');
+        return;
+      }
+
+      const entries = loadEntries();
+      entries.push({ date, type, category, amount });
+      saveEntries(entries);
+      renderEntries();
+
+      document.getElementById('category').value = '';
+      document.getElementById('amount').value = '';
+    }
+
+    function deleteEntry(index) {
+      const entries = loadEntries();
+      entries.splice(index, 1);
+      saveEntries(entries);
+      renderEntries();
+    }
+
+    document.getElementById('addEntryBtn').addEventListener('click', addEntry);
+
+    // Initialize
+    window.addEventListener('load', () => {
+      // Default date = today
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('date').value = today;
+      renderEntries();
+    });
+  </script>
+</body>
+</html>
