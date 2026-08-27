@@ -24,12 +24,13 @@
         .error-msg { color: #ff6b6b; font-size: 0.85rem; margin-top: 6px; display: none; }
         .empty-row td { text-align: center; color: #888; padding: 16px 8px; }
         .status-msg { font-size: 0.8rem; color: #888; margin-top: 6px; }
+        .loading-msg { text-align: center; padding: 16px; color: #888; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Daily Budget Tracker</h1>
-        <p>Track your income and expenses daily. Data is saved automatically and persists between visits.</p>
+        <p>Track your income and expenses daily. Data is saved to Supabase and persists across devices.</p>
 
         <div class="flex-row">
             <div>
@@ -74,12 +75,21 @@
                     <th>Actions</th>
                 </tr>
             </thead>
-            <tbody id="entriesTableBody"></tbody>
+            <tbody id="entriesTableBody">
+                <tr class="empty-row"><td colspan="5" class="loading-msg">Loading...</td></tr>
+            </tbody>
         </table>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
-        const STORAGE_KEY = 'budget-entries';
+        // ---- Supabase config ----
+        const SUPABASE_URL = 'https://xuagfcmkxsecdcugsfyf.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh1YWdmY21reHNlY2RjdWdzZnlmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc3NzA3NTksImV4cCI6MjEwMzM0Njc1OX0.gYSWhd4guIezxMBkoRo1u3xSS9E6tXL7bMD2LF3UIiE';
+        const TABLE_NAME = 'budget_entries';
+
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
         let entries = [];
 
         function showError(msg) {
@@ -93,27 +103,22 @@
             if (msg) setTimeout(() => { document.getElementById('statusMsg').textContent = ''; }, 2000);
         }
 
-        function loadEntries() {
-            try {
-                const raw = localStorage.getItem(STORAGE_KEY);
-                entries = raw ? JSON.parse(raw) : [];
-            } catch (err) {
-                // Corrupt or missing data — start empty
+        async function loadEntries() {
+            const { data, error } = await supabaseClient
+                .from(TABLE_NAME)
+                .select('*')
+                .order('date', { ascending: false })
+                .order('id', { ascending: false });
+
+            if (error) {
+                showError('Failed to load entries: ' + error.message);
                 entries = [];
+                return;
             }
+            entries = data || [];
         }
 
-        function saveEntries() {
-            try {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
-                return true;
-            } catch (err) {
-                showError('Failed to save. Your entry may not persist.');
-                return false;
-            }
-        }
-
-        function addEntry() {
+        async function addEntry() {
             showError('');
             const dateValue = document.getElementById('date').value;
             const typeValue = document.getElementById('type').value;
@@ -142,39 +147,42 @@
             const btn = document.getElementById('addEntryBtn');
             btn.disabled = true;
 
-            const newEntry = {
-                id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
-                date: dateValue,
-                type: typeValue,
-                category: categoryValue,
-                amount: amountNum
-            };
+            const { data, error } = await supabaseClient
+                .from(TABLE_NAME)
+                .insert([{
+                    date: dateValue,
+                    type: typeValue,
+                    category: categoryValue,
+                    amount: amountNum
+                }])
+                .select();
 
-            entries.unshift(newEntry);
-            const ok = saveEntries();
             btn.disabled = false;
 
-            if (!ok) {
-                // Roll back the in-memory add since it wasn't persisted
-                entries = entries.filter(e => e.id !== newEntry.id);
+            if (error) {
+                showError('Failed to save: ' + error.message);
                 return;
             }
 
             document.getElementById('category').value = '';
             document.getElementById('amount').value = '';
             showStatus('Entry added');
+            await loadEntries();
             render();
         }
 
-        function deleteEntry(id) {
-            const previous = entries;
-            entries = entries.filter(e => e.id !== id);
-            const ok = saveEntries();
-            if (!ok) {
-                entries = previous;
+        async function deleteEntry(id) {
+            const { error } = await supabaseClient
+                .from(TABLE_NAME)
+                .delete()
+                .eq('id', id);
+
+            if (error) {
+                showError('Failed to delete: ' + error.message);
                 return;
             }
             showStatus('Entry deleted');
+            await loadEntries();
             render();
         }
 
@@ -199,7 +207,8 @@
                 const tdCategory = document.createElement('td');
                 tdCategory.textContent = entry.category || '';
                 const tdAmount = document.createElement('td');
-                tdAmount.textContent = '$' + (typeof entry.amount === 'number' ? entry.amount.toFixed(2) : '0.00');
+                const amountNum = typeof entry.amount === 'number' ? entry.amount : parseFloat(entry.amount);
+                tdAmount.textContent = '$' + (isNaN(amountNum) ? '0.00' : amountNum.toFixed(2));
                 const tdActions = document.createElement('td');
                 const delBtn = document.createElement('button');
                 delBtn.className = 'delete-btn';
@@ -214,8 +223,8 @@
                 tr.appendChild(tdActions);
                 tbody.appendChild(tr);
 
-                if (entry.type === 'income') totalIncome += entry.amount;
-                else if (entry.type === 'expense') totalExpenses += entry.amount;
+                if (entry.type === 'income') totalIncome += amountNum || 0;
+                else if (entry.type === 'expense') totalExpenses += amountNum || 0;
             });
 
             document.getElementById('totalIncome').textContent = '$' + totalIncome.toFixed(2);
@@ -223,10 +232,10 @@
             document.getElementById('netBalance').textContent = '$' + (totalIncome - totalExpenses).toFixed(2);
         }
 
-        window.addEventListener('load', () => {
+        window.addEventListener('load', async () => {
             const today = new Date().toISOString().split('T')[0];
             document.getElementById('date').value = today;
-            loadEntries();
+            await loadEntries();
             render();
         });
 
