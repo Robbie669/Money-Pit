@@ -93,23 +93,19 @@
             if (msg) setTimeout(() => { document.getElementById('statusMsg').textContent = ''; }, 2000);
         }
 
-        async function loadEntries() {
+        function loadEntries() {
             try {
-                const result = await window.storage.get(STORAGE_KEY, false);
-                entries = result && result.value ? JSON.parse(result.value) : [];
+                const raw = localStorage.getItem(STORAGE_KEY);
+                entries = raw ? JSON.parse(raw) : [];
             } catch (err) {
-                // Key doesn't exist yet, or a real error — either way, start empty
+                // Corrupt or missing data — start empty
                 entries = [];
             }
         }
 
-        async function saveEntries() {
+        function saveEntries() {
             try {
-                const result = await window.storage.set(STORAGE_KEY, JSON.stringify(entries), false);
-                if (!result) {
-                    showError('Failed to save. Your entry may not persist.');
-                    return false;
-                }
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
                 return true;
             } catch (err) {
                 showError('Failed to save. Your entry may not persist.');
@@ -117,7 +113,7 @@
             }
         }
 
-        async function addEntry() {
+        function addEntry() {
             showError('');
             const dateValue = document.getElementById('date').value;
             const typeValue = document.getElementById('type').value;
@@ -155,7 +151,7 @@
             };
 
             entries.unshift(newEntry);
-            const ok = await saveEntries();
+            const ok = saveEntries();
             btn.disabled = false;
 
             if (!ok) {
@@ -170,10 +166,10 @@
             render();
         }
 
-        async function deleteEntry(id) {
+        function deleteEntry(id) {
             const previous = entries;
             entries = entries.filter(e => e.id !== id);
-            const ok = await saveEntries();
+            const ok = saveEntries();
             if (!ok) {
                 entries = previous;
                 return;
@@ -227,10 +223,10 @@
             document.getElementById('netBalance').textContent = '$' + (totalIncome - totalExpenses).toFixed(2);
         }
 
-        window.addEventListener('load', async () => {
+        window.addEventListener('load', () => {
             const today = new Date().toISOString().split('T')[0];
             document.getElementById('date').value = today;
-            await loadEntries();
+            loadEntries();
             render();
         });
 
