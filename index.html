@@ -9,9 +9,10 @@
         h1 { color: #66fcf1; }
         .container { max-width: 800px; margin: 0 auto; background: #1f2833; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.5); }
         label { display: block; margin-top: 10px; font-weight: 600; }
-        input, select { width: 100%; padding: 8px; margin-top: 4px; border-radius: 4px; border: 1px solid #45a29e; background: #0b0c10; color: #c5c6c7; }
+        input, select { width: 100%; padding: 8px; margin-top: 4px; border-radius: 4px; border: 1px solid #45a29e; background: #0b0c10; color: #c5c6c7; box-sizing: border-box; }
         button { margin-top: 15px; padding: 10px 16px; border: none; border-radius: 4px; background: #45a29e; color: #0b0c10; font-weight: 700; cursor: pointer; }
         button:hover { background: #66fcf1; }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
         table { width: 100%; border-collapse: collapse; margin-top: 20px; }
         th, td { padding: 8px; border-bottom: 1px solid #45a29e; text-align: left; font-size: 0.9rem; }
         th { background: #0b0c10; color: #66fcf1; }
@@ -20,13 +21,16 @@
         .flex-row > div { flex: 1; }
         .delete-btn { background: #c0392b; color: #fff; padding: 4px 8px; border-radius: 4px; border: none; cursor: pointer; font-size: 0.8rem; }
         .delete-btn:hover { background: #e74c3c; }
+        .error-msg { color: #ff6b6b; font-size: 0.85rem; margin-top: 6px; display: none; }
+        .empty-row td { text-align: center; color: #888; padding: 16px 8px; }
+        .status-msg { font-size: 0.8rem; color: #888; margin-top: 6px; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Daily Budget Tracker</h1>
-        <p>Track your income and expenses daily. Data is saved in Supabase cloud.</p>
-        
+        <p>Track your income and expenses daily. Data is saved automatically and persists between visits.</p>
+
         <div class="flex-row">
             <div>
                 <label for="date">Date</label>
@@ -47,7 +51,10 @@
         <label for="amount">Amount</label>
         <input type="number" id="amount" step="0.01" placeholder="e.g. 25.50">
 
+        <div class="error-msg" id="errorMsg"></div>
+
         <button id="addEntryBtn">Add Entry</button>
+        <span class="status-msg" id="statusMsg"></span>
 
         <div class="summary">
             <h2>Summary</h2>
@@ -71,120 +78,163 @@
         </table>
     </div>
 
-    <!-- Supabase client -->
-    <script src="https://jsdelivr.net"></script>
     <script>
-        console.log("Initializing Supabase…");
-        const SUPABASE_URL = "https://supabase.co";
-        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh1YWdmY21reHNlY2RjdWdzZnlmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc3NzA3NTksImV4cCI6MjEwMzM0Njc1OX0.gYSWhd4guIezxMBkoRo1u3xSS9E6tXL7bMD2LF3UIiE";
-        
-        // FIXED: Initialized utilizing lowercase global reference 'supabase.createClient'
-        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        console.log("Supabase client created:", supabaseClient);
+        const STORAGE_KEY = 'budget-entries';
+        let entries = [];
+
+        function showError(msg) {
+            const el = document.getElementById('errorMsg');
+            el.textContent = msg;
+            el.style.display = msg ? 'block' : 'none';
+        }
+
+        function showStatus(msg) {
+            document.getElementById('statusMsg').textContent = msg;
+            if (msg) setTimeout(() => { document.getElementById('statusMsg').textContent = ''; }, 2000);
+        }
 
         async function loadEntries() {
-            console.log("Loading entries…");
-            const { data, error } = await supabaseClient
-                .from("budget_entries")
-                .select("*")
-                .order("id", { ascending: false });
-
-            if (error) {
-                console.error("Error loading entries:", error);
-                return [];
+            try {
+                const result = await window.storage.get(STORAGE_KEY, false);
+                entries = result && result.value ? JSON.parse(result.value) : [];
+            } catch (err) {
+                // Key doesn't exist yet, or a real error — either way, start empty
+                entries = [];
             }
-            console.log("Entries loaded:", data);
-            return data;
+        }
+
+        async function saveEntries() {
+            try {
+                const result = await window.storage.set(STORAGE_KEY, JSON.stringify(entries), false);
+                if (!result) {
+                    showError('Failed to save. Your entry may not persist.');
+                    return false;
+                }
+                return true;
+            } catch (err) {
+                showError('Failed to save. Your entry may not persist.');
+                return false;
+            }
         }
 
         async function addEntry() {
-            console.log("Add Entry clicked");
-            const dateValue = document.getElementById("date").value;
-            const typeValue = document.getElementById("type").value;
-            const categoryValue = document.getElementById("category").value.trim();
-            const amountValue = document.getElementById("amount").value;
+            showError('');
+            const dateValue = document.getElementById('date').value;
+            const typeValue = document.getElementById('type').value;
+            const categoryValue = document.getElementById('category').value.trim();
+            const amountValue = document.getElementById('amount').value;
 
-            if (!amountValue || !categoryValue) {
-                alert("Please enter both category and amount.");
+            if (!categoryValue) {
+                showError('Please enter a category.');
+                return;
+            }
+            if (!amountValue) {
+                showError('Please enter an amount.');
                 return;
             }
 
             const amountNum = parseFloat(amountValue);
             if (isNaN(amountNum) || amountNum <= 0) {
-                alert("Please enter a valid positive amount.");
+                showError('Please enter a valid positive amount.');
+                return;
+            }
+            if (!dateValue) {
+                showError('Please choose a date.');
                 return;
             }
 
-            // FIXED: Payload keys match your capitalized database headers (Date, Type, Category, Amount)
-            console.log("Inserting:", { Date: dateValue, Type: typeValue, Category: categoryValue, Amount: amountNum });
-            const { error } = await supabaseClient
-                .from("budget_entries")
-                .insert([{ Date: dateValue, Type: typeValue, Category: categoryValue, Amount: amountNum }]);
+            const btn = document.getElementById('addEntryBtn');
+            btn.disabled = true;
 
-            if (error) {
-                console.error("Error adding entry:", error);
-                alert("Failed to add entry. Check if Row Level Security (RLS) or table schema matches.");
+            const newEntry = {
+                id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+                date: dateValue,
+                type: typeValue,
+                category: categoryValue,
+                amount: amountNum
+            };
+
+            entries.unshift(newEntry);
+            const ok = await saveEntries();
+            btn.disabled = false;
+
+            if (!ok) {
+                // Roll back the in-memory add since it wasn't persisted
+                entries = entries.filter(e => e.id !== newEntry.id);
                 return;
             }
 
-            document.getElementById("category").value = "";
-            document.getElementById("amount").value = "";
-            renderEntries();
+            document.getElementById('category').value = '';
+            document.getElementById('amount').value = '';
+            showStatus('Entry added');
+            render();
         }
 
         async function deleteEntry(id) {
-            console.log("Deleting entry:", id);
-            const { error } = await supabaseClient
-                .from("budget_entries")
-                .delete()
-                .eq("id", id);
-
-            if (error) {
-                console.error("Error deleting entry:", error);
-                alert("Failed to delete entry.");
+            const previous = entries;
+            entries = entries.filter(e => e.id !== id);
+            const ok = await saveEntries();
+            if (!ok) {
+                entries = previous;
                 return;
             }
-            renderEntries();
+            showStatus('Entry deleted');
+            render();
         }
 
-        async function renderEntries() {
-            const entries = await loadEntries();
-            const tbody = document.getElementById("entriesTableBody");
-            tbody.innerHTML = "";
+        function render() {
+            const tbody = document.getElementById('entriesTableBody');
+            tbody.innerHTML = '';
+
+            if (entries.length === 0) {
+                tbody.innerHTML = '<tr class="empty-row"><td colspan="5">No entries yet. Add one above.</td></tr>';
+            }
 
             let totalIncome = 0;
             let totalExpenses = 0;
 
             entries.forEach(entry => {
-                const tr = document.createElement("tr");
-                // FIXED: Property parsing reads from capitalized keys returned by your database
-                tr.innerHTML = `
-                    <td>${entry.Date || ""}</td>
-                    <td>${entry.Type || ""}</td>
-                    <td>${entry.Category || ""}</td>
-                    <td>$${entry.Amount ? entry.Amount.toFixed(2) : "0.00"}</td>
-                    <td>
-                        <button class="delete-btn" onclick="deleteEntry(${entry.id})">Delete</button>
-                    </td>
-                `;
+                const tr = document.createElement('tr');
+
+                const tdDate = document.createElement('td');
+                tdDate.textContent = entry.date || '';
+                const tdType = document.createElement('td');
+                tdType.textContent = entry.type || '';
+                const tdCategory = document.createElement('td');
+                tdCategory.textContent = entry.category || '';
+                const tdAmount = document.createElement('td');
+                tdAmount.textContent = '$' + (typeof entry.amount === 'number' ? entry.amount.toFixed(2) : '0.00');
+                const tdActions = document.createElement('td');
+                const delBtn = document.createElement('button');
+                delBtn.className = 'delete-btn';
+                delBtn.textContent = 'Delete';
+                delBtn.addEventListener('click', () => deleteEntry(entry.id));
+                tdActions.appendChild(delBtn);
+
+                tr.appendChild(tdDate);
+                tr.appendChild(tdType);
+                tr.appendChild(tdCategory);
+                tr.appendChild(tdAmount);
+                tr.appendChild(tdActions);
                 tbody.appendChild(tr);
 
-                if (entry.Type === "income") totalIncome += entry.Amount;
-                else if (entry.Type === "expense") totalExpenses += entry.Amount;
+                if (entry.type === 'income') totalIncome += entry.amount;
+                else if (entry.type === 'expense') totalExpenses += entry.amount;
             });
 
-            document.getElementById("totalIncome").textContent = "$" + totalIncome.toFixed(2);
-            document.getElementById("totalExpenses").textContent = "$" + totalExpenses.toFixed(2);
-            document.getElementById("netBalance").textContent = "$" + (totalIncome - totalExpenses).toFixed(2);
+            document.getElementById('totalIncome').textContent = '$' + totalIncome.toFixed(2);
+            document.getElementById('totalExpenses').textContent = '$' + totalExpenses.toFixed(2);
+            document.getElementById('netBalance').textContent = '$' + (totalIncome - totalExpenses).toFixed(2);
         }
 
-        window.addEventListener("load", () => {
-            const today = new Date().toISOString().split("T")[0];
-            document.getElementById("date").value = today;
-            renderEntries();
+        window.addEventListener('load', async () => {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('date').value = today;
+            await loadEntries();
+            render();
         });
 
-        document.getElementById("addEntryBtn").addEventListener("click", addEntry);
+        document.getElementById('addEntryBtn').addEventListener('click', addEntry);
     </script>
 </body>
 </html>
